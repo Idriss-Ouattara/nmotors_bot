@@ -5,7 +5,7 @@ from mistralai import Mistral
 import requests
 
 app = FastAPI()
-client = Mistral(api_key="ta_clé")
+client = Mistral(api_key="NFbCfDpi9y2W0BQ0jkZmWuXX9sXd2DZO")
 
 # Mémoire des conversations
 historique = {}
