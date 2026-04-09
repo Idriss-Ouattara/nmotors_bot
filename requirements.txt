@@ -1,4 +1,4 @@
 fastapi
 uvicorn
-mistralai==0.4.2
+mistralai>=1.0.0
 requests
