@@ -2,13 +2,13 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import requests
 import os
-from mistralai import Mistral
+import json
 
 app = FastAPI()
 
-# Récupérer la clé depuis les variables d'environnement
-api_key = os.environ.get("MISTRAL_API_KEY", "NFbCfDpi9y2W0BQ0jkZmWuXX9sXd2DZO")
-client = Mistral(api_key=api_key)
+# Configuration
+API_KEY = os.environ.get("MISTRAL_API_KEY", "NFbCfDpi9y2W0BQ0jkZmWuXX9sXd2DZO")
+MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
 
 # Mémoire des conversations
 historique = {}
@@ -17,29 +17,53 @@ class Message(BaseModel):
     texte: str
     user_id: str
 
+def call_mistral(messages):
+    """Appelle l'API Mistral directement en HTTP"""
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": "open-mistral-7b",
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
+    
+    response = requests.post(MISTRAL_URL, headers=headers, json=data)
+    
+    if response.status_code != 200:
+        print(f"Erreur API: {response.status_code} - {response.text}")
+        return "Désolé, je rencontre une erreur technique."
+    
+    result = response.json()
+    return result["choices"][0]["message"]["content"]
+
 @app.post("/message")
 def recevoir_message(msg: Message):
+    # Créer l'historique si nouveau client
     if msg.user_id not in historique:
         historique[msg.user_id] = []
     
+    # Ajouter le message du client
     historique[msg.user_id].append({
         "role": "user",
         "content": msg.texte
     })
     
-    # Appel à Mistral avec la nouvelle syntaxe
-    response = client.chat.complete(
-        model="open-mistral-7b",
-        messages=[
-            {
-                "role": "system",
-                "content": "Tu es l'assistant de NMotors, un service de covoiturage au Cameroun. Réponds en français de façon courte et sympathique."
-            }
-        ] + historique[msg.user_id]
-    )
+    # Construire les messages avec le système
+    messages = [
+        {
+            "role": "system",
+            "content": "Tu es l'assistant de NMotors, un service de covoiturage au Cameroun. Réponds en français de façon courte et sympathique."
+        }
+    ] + historique[msg.user_id]
     
-    reponse = response.choices[0].message.content
+    # Appeler Mistral
+    reponse = call_mistral(messages)
     
+    # Sauvegarder la réponse
     historique[msg.user_id].append({
         "role": "assistant",
         "content": reponse
@@ -77,17 +101,14 @@ async def webhook(request: Request):
             "content": texte
         })
 
-        response = client.chat.complete(
-            model="open-mistral-7b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Assistant NMotors, réponds court en français"
-                }
-            ] + historique[user_id]
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": "Assistant NMotors, réponds court en français"
+            }
+        ] + historique[user_id]
 
-        reponse = response.choices[0].message.content
+        reponse = call_mistral(messages)
 
         historique[user_id].append({
             "role": "assistant",
