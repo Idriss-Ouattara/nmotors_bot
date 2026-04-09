@@ -2,14 +2,13 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import requests
 import os
-from mistralai.client import MistralClient
-from mistralai.models.chat import ChatMessage
+from mistralai import Mistral
 
 app = FastAPI()
 
 # Récupérer la clé depuis les variables d'environnement
 api_key = os.environ.get("MISTRAL_API_KEY", "NFbCfDpi9y2W0BQ0jkZmWuXX9sXd2DZO")
-client = MistralClient(api_key=api_key)
+client = Mistral(api_key=api_key)
 
 # Mémoire des conversations
 historique = {}
@@ -28,17 +27,15 @@ def recevoir_message(msg: Message):
         "content": msg.texte
     })
     
-    # Convertir l'historique en objets ChatMessage
-    messages = [
-        ChatMessage(role="system", content="Tu es l'assistant de NMotors, un service de covoiturage au Cameroun. Réponds en français de façon courte et sympathique.")
-    ]
-    
-    for h in historique[msg.user_id]:
-        messages.append(ChatMessage(role=h["role"], content=h["content"]))
-    
-    response = client.chat(
+    # Appel à Mistral avec la nouvelle syntaxe
+    response = client.chat.complete(
         model="open-mistral-7b",
-        messages=messages
+        messages=[
+            {
+                "role": "system",
+                "content": "Tu es l'assistant de NMotors, un service de covoiturage au Cameroun. Réponds en français de façon courte et sympathique."
+            }
+        ] + historique[msg.user_id]
     )
     
     reponse = response.choices[0].message.content
@@ -80,16 +77,14 @@ async def webhook(request: Request):
             "content": texte
         })
 
-        messages = [
-            ChatMessage(role="system", content="Assistant NMotors, réponds court en français")
-        ]
-        
-        for h in historique[user_id]:
-            messages.append(ChatMessage(role=h["role"], content=h["content"]))
-
-        response = client.chat(
+        response = client.chat.complete(
             model="open-mistral-7b",
-            messages=messages
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Assistant NMotors, réponds court en français"
+                }
+            ] + historique[user_id]
         )
 
         reponse = response.choices[0].message.content
